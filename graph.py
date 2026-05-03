@@ -13,9 +13,9 @@ load_dotenv()
 llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
 
 class ExtractedData(BaseModel):
-    has_order: str = Field(description="اكتب 'true' فقط إذا ذكر العميل خدمة محددة أو طلب شراء واضح يريد تنفيذه. الأسئلة والاستفسارات ليست طلبات. وإلا 'false'")
-    order_details: str = Field(description="ما هو الطلب الذي يريده العميل باختصار؟ اتركها فارغة إذا كان مجرد سؤال أو استفسار عن رسالة سابقة.", default="")
-    is_confirming: str = Field(description="اكتب 'true' إذا وافق العميل بوضوح على تأكيد الطلب. وإلا 'false'")
+    has_order: str = Field(description="اكتب 'true' إذا ذكر العميل خدمة محددة يريدها. وإلا 'false'")
+    order_details: str = Field(description="ما هو الطلب الذي يريده العميل؟", default="")
+    is_confirming: str = Field(description="اكتب 'true' فقط وفقط إذا كان الأيجنت في رسالته السابقة مباشرة قد طلب تأكيد الأوردر (مثل 'أأكد الأوردر على كده؟') وأجاب العميل بالموافقة. لو العميل بيطلب لأول مرة اكتب 'false' حتى لو قال 'تمام'.")
 
 structured_llm = llm.with_structured_output(ExtractedData)
 
@@ -29,20 +29,21 @@ def extract_node(state: AgentState):
     prompt = f"""
     أنت محلل بيانات دقيق. استخرج المعلومات من المحادثة:
     {history_text}
-    
-    تحذير هام: إذا كان العميل يسأل عن رسالة سابقة، أو يستفسر عن كيفية العمل، أو يقول "ازاي" فهذا *ليس* طلبًا (Order).
-    الطلب يُحسب فقط عندما يقرر العميل بشكل واضح أنه يريد شراء خدمة معينة.
-    
-    1. هل ذكر العميل تفاصيل خدمة أو أوردر يريد تنفيذه بشكل قاطع؟
-    2. هل أكد العميل الأوردر بعد ما سأله الأيجنت عن التأكيد؟
     """
     extraction = structured_llm.invoke(prompt)
     
     updates = {}
+    current_order = state.get("order_details", "")
+    
+    # لو لقى تفاصيل أوردر جديدة، بيحفظها ويخلي حالة التأكيد False (لازم يسأله الأول)
     if extraction.has_order.lower() == 'true' and extraction.order_details:
         updates["order_details"] = extraction.order_details
         updates["user_confirmed"] = False 
+    elif current_order:
+        # لو ملقاش أوردر جديد بس كان في أوردر قديم، نحتفظ بيه عشان ميتمسحش لما العميل يقول "تمام"
+        updates["order_details"] = current_order
         
+    # هنا بيتأكد من الموافقة الصريحة بناءً على سؤال التأكيد
     if extraction.is_confirming.lower() == 'true':
         updates["user_confirmed"] = True
         

@@ -38,7 +38,6 @@ async def receive_message(request: Request):
                         
                         if message.get("type") == "text":
                             user_text = message["text"]["body"]
-                            print(f"📩 رسالة جديدة من {sender_number}: {user_text}")
 
                             config = {"configurable": {"thread_id": sender_number}}
                             
@@ -62,6 +61,13 @@ async def receive_message(request: Request):
                                     agent_messages.append(msg[1])
 
                             response_text = agent_messages[-1] if agent_messages else "عفواً، ثواني..."
+                            
+                            # ======= الإضافة هنا للطباعة المنظمة في التيرمينال =======
+                            print(f"👤 العميل ({sender_number}): {user_text}", flush=True)
+                            print(f"🤖 الأيجنت: {response_text}", flush=True)
+                            print("-" * 50, flush=True)
+                            # =======================================================
+
                             await send_whatsapp_message(sender_number, response_text)
     except Exception as e:
         print(f"⚠️ خطأ أثناء معالجة الرسالة: {e}")
