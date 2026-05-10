@@ -28,6 +28,7 @@ def setup_database():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS orders (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            customer_name TEXT,
             phone_number TEXT NOT NULL,
             order_details TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

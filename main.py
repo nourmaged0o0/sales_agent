@@ -6,16 +6,113 @@ import subprocess  # ضفنا المكتبة دي عشان نرن الكامبي
 from fastapi import FastAPI, Request, Response
 from dotenv import load_dotenv
 from graph import app as agent_app
-from tools import get_campaign_message  # ضفنا الامبورت هنا
+from tools import get_campaign_message
+from fastapi.middleware.cors import CORSMiddleware
+import sqlite3
+from tools import DB_PATH
+
 
 load_dotenv()
 
+
+
 app = FastAPI()
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], 
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 META_VERIFY_TOKEN = os.getenv("META_VERIFY_TOKEN")
 META_ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN")
 META_PHONE_NUMBER_ID = os.getenv("META_PHONE_NUMBER_ID")
 META_URL = f"https://graph.facebook.com/v25.0/{META_PHONE_NUMBER_ID}/messages"
+
+@app.put("/api/leads/{lead_id}")
+async def update_lead(lead_id: int, request: Request):
+    data = await request.json()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE contacts SET name=?, phone_number=?, context_or_interest=? WHERE id=?",
+                       (data['name'], data['phone_number'], data['interest'], lead_id))
+        conn.commit()
+        return {"status": "success"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        conn.close()
+
+@app.delete("/api/leads/{lead_id}")
+def delete_lead(lead_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM contacts WHERE id=?", (lead_id,))
+        conn.commit()
+        return {"status": "success"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        conn.close()
+
+@app.get("/api/orders")
+def get_orders():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM orders ORDER BY id DESC")
+    columns = [column[0] for column in cursor.description]
+    orders = [dict(zip(columns, row)) for row in cursor.fetchall()]
+    conn.close()
+    return orders
+
+@app.get("/api/stats")
+def get_stats():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    stats = {}
+    stats['total_leads'] = cursor.execute("SELECT COUNT(*) FROM contacts").fetchone()[0]
+    stats['reached'] = cursor.execute("SELECT COUNT(*) FROM contacts WHERE status = 'reached'").fetchone()[0]
+    stats['orders'] = cursor.execute("SELECT COUNT(*) FROM orders").fetchone()[0]
+    conn.close()
+    return stats
+
+@app.get("/api/leads")
+def get_leads():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM contacts ORDER BY id DESC")
+    columns = [column[0] for column in cursor.description]
+    leads = [dict(zip(columns, row)) for row in cursor.fetchall()]
+    conn.close()
+    return leads
+
+@app.post("/api/leads")
+async def add_lead(request: Request):
+    data = await request.json()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT INTO contacts (name, phone_number, context_or_interest) VALUES (?, ?, ?)",
+                       (data['name'], data['phone_number'], data['interest']))
+        conn.commit()
+        return {"status": "success"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        conn.close()
+
+@app.post("/api/run-campaign")
+def run_campaign_manual():
+    try:
+        subprocess.run([sys.executable, "campaign.py"], check=True)
+        return {"status": "campaign started"}
+    except:
+        return {"status": "error"}
+
 
 @app.get("/whatsapp")
 async def verify_webhook(request: Request):
@@ -90,14 +187,14 @@ async def send_whatsapp_message(to: str, text: str):
 
 if __name__ == "__main__":
     # تشغيل ملف الكامبين الأول قبل ما السيرفر يقوم
-    print("🚀 جاري تشغيل حملة الواتساب أولاً (campaign.py)...")
-    try:
-        subprocess.run([sys.executable, "campaign.py"], check=True)
-        print("✅ تم الانتهاء من إرسال رسائل الحملة.")
-    except subprocess.CalledProcessError as e:
-        print(f"❌ حصل خطأ أثناء تشغيل الحملة: {e}")
-    except FileNotFoundError:
-        print("❌ ملف campaign.py غير موجود، تأكد من الاسم.")
+    # print("🚀 جاري تشغيل حملة الواتساب أولاً (campaign.py)...")
+    # try:
+    #     subprocess.run([sys.executable, "campaign.py"], check=True)
+    #     print("✅ تم الانتهاء من إرسال رسائل الحملة.")
+    # except subprocess.CalledProcessError as e:
+    #     print(f"❌ حصل خطأ أثناء تشغيل الحملة: {e}")
+    # except FileNotFoundError:
+    #     print("❌ ملف campaign.py غير موجود، تأكد من الاسم.")
         
     # تشغيل سيرفر FastAPI بعد انتهاء الحملة
     print("🌐 جاري تشغيل سيرفر FastAPI...")

@@ -13,8 +13,9 @@ load_dotenv()
 llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
 
 class ExtractedData(BaseModel):
-    has_order: str = Field(description="اكتب 'true' إذا ذكر العميل خدمة محددة يريدها. وإلا 'false'")
-    order_details: str = Field(description="ما هو الطلب الذي يريده العميل؟", default="")
+    # تم تقوية الوصف هنا عشان يتجاهل الأسئلة
+    has_order: str = Field(description="اكتب 'true' فقط إذا ذكر العميل خدمة محددة أو طلب شراء واضح يريد تنفيذه. الأسئلة والاستفسارات ليست طلبات. وإلا 'false'")
+    order_details: str = Field(description="ما هو الطلب الذي يريده العميل باختصار؟ اتركها فارغة إذا كان مجرد سؤال أو استفسار.", default="")
     is_confirming: str = Field(description="اكتب 'true' فقط وفقط إذا كان الأيجنت في رسالته السابقة مباشرة قد طلب تأكيد الأوردر (مثل 'أأكد الأوردر على كده؟') وأجاب العميل بالموافقة. لو العميل بيطلب لأول مرة اكتب 'false' حتى لو قال 'تمام'.")
 
 structured_llm = llm.with_structured_output(ExtractedData)
@@ -26,9 +27,14 @@ def extract_node(state: AgentState):
         content = msg.content if hasattr(msg, "content") else msg[1]
         history_text += f"{role}: {content}\n"
     
+    # تم تقوية البرومبت هنا عشان نحذره من تسجيل الاستفسارات كأوردرات
     prompt = f"""
     أنت محلل بيانات دقيق. استخرج المعلومات من المحادثة:
     {history_text}
+    
+    تحذير هام: 
+    - إذا كان العميل يسأل عن رسالة سابقة، أو يستفسر عن كيفية العمل، أو يقول "ازاي" فهذا *ليس* طلبًا (Order).
+    - الطلب يُحسب فقط عندما يقرر العميل بشكل واضح أنه يريد شراء خدمة معينة أو الموافقة على الخطة.
     """
     extraction = structured_llm.invoke(prompt)
     
