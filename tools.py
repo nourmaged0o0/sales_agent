@@ -57,3 +57,18 @@ def get_campaign_message(phone_number):
         return "لا توجد رسالة حملة مسجلة."
     finally:
         conn.close()
+
+# def update_lead_status(phone_number, new_status="reached"):
+#     """تحديث حالة العميل في جدول contacts"""
+#     db_phone = normalize_phone(phone_number)
+#     conn = sqlite3.connect(DB_PATH)
+#     cursor = conn.cursor()
+#     try:
+#         cursor.execute("UPDATE contacts SET status = ? WHERE phone_number = ?", (new_status, db_phone))
+#         conn.commit()
+#         return True
+#     except Exception as e:
+#         print(f"Error updating status: {e}")
+#         return False
+#     finally:
+#         conn.close()

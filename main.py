@@ -3,7 +3,7 @@ import httpx
 import sys
 import uvicorn
 import subprocess  # ضفنا المكتبة دي عشان نرن الكامبين
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
 from dotenv import load_dotenv
 from graph import app as agent_app
 from tools import get_campaign_message
@@ -11,13 +11,9 @@ from fastapi.middleware.cors import CORSMiddleware
 import sqlite3
 from tools import DB_PATH
 
-
 load_dotenv()
 
-
-
 app = FastAPI()
-
 
 app.add_middleware(
     CORSMiddleware,
@@ -25,6 +21,38 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ======= كلاس إدارة الويب سوكيت =======
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: str):
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(message)
+            except:
+                pass
+
+manager = ConnectionManager()
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+# =======================================
 
 META_VERIFY_TOKEN = os.getenv("META_VERIFY_TOKEN")
 META_ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN")
@@ -40,6 +68,7 @@ async def update_lead(lead_id: int, request: Request):
         cursor.execute("UPDATE contacts SET name=?, phone_number=?, context_or_interest=? WHERE id=?",
                        (data['name'], data['phone_number'], data['interest'], lead_id))
         conn.commit()
+        await manager.broadcast("update") # إشعار للفرونت إند
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -47,12 +76,13 @@ async def update_lead(lead_id: int, request: Request):
         conn.close()
 
 @app.delete("/api/leads/{lead_id}")
-def delete_lead(lead_id: int):
+async def delete_lead(lead_id: int): # حولناها لـ async
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     try:
         cursor.execute("DELETE FROM contacts WHERE id=?", (lead_id,))
         conn.commit()
+        await manager.broadcast("update") # إشعار للفرونت إند
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -99,11 +129,18 @@ async def add_lead(request: Request):
         cursor.execute("INSERT INTO contacts (name, phone_number, context_or_interest) VALUES (?, ?, ?)",
                        (data['name'], data['phone_number'], data['interest']))
         conn.commit()
+        await manager.broadcast("update") # إشعار للفرونت إند
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
     finally:
         conn.close()
+
+# المسار ده مخفي للكامبين عشان يبلغ السيرفر الأساسي إن في تحديث
+@app.post("/api/internal/trigger-update")
+async def trigger_update():
+    await manager.broadcast("update")
+    return {"status": "success"}
 
 @app.post("/api/run-campaign")
 def run_campaign_manual():
@@ -112,7 +149,6 @@ def run_campaign_manual():
         return {"status": "campaign started"}
     except:
         return {"status": "error"}
-
 
 @app.get("/whatsapp")
 async def verify_webhook(request: Request):
@@ -166,6 +202,10 @@ async def receive_message(request: Request):
                             # =======================================================
 
                             await send_whatsapp_message(sender_number, response_text)
+                            
+                            # نبعت إشعار للداشبورد إن في أكشن جديد حصل (مثلاً أوردر جديد اتسجل)
+                            await manager.broadcast("update")
+                            
     except Exception as e:
         print(f"⚠️ خطأ أثناء معالجة الرسالة: {e}")
 

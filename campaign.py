@@ -52,7 +52,6 @@ def send_whatsapp_message(phone, message_in_arabic):
     except:
         return False
 
-# تم التعديل هنا لاستقبال وحفظ الرسالة
 def update_lead_status(phone, status, sent_message=""):
     conn = sqlite3.connect('whatsapp_campaign.db')
     cursor = conn.cursor()
@@ -86,5 +85,11 @@ if __name__ == "__main__":
         success = send_whatsapp_message(phone, final_message)
         status = "reached" if success else "couldn't reach"
         
-        # تم التعديل هنا لتمرير الرسالة النهائية عشان تتحفظ في الداتا بيز
+        # حفظنا الداتا في الداتا بيز الأول
         update_lead_status(phone, status, final_message)
+        
+        # بنخبط على السيرفر الأساسي عشان يبلغ الداشبورد إن في تغيير حصل
+        try:
+            requests.post("http://localhost:8000/api/internal/trigger-update", timeout=2)
+        except Exception as e:
+            print(f"⚠️ Could not notify dashboard: {e}")
