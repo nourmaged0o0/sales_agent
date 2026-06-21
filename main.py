@@ -226,7 +226,6 @@ async def send_whatsapp_message(to: str, text: str):
         await client.post(META_URL, headers=headers, json=payload)
 
 if __name__ == "__main__":
-    # تشغيل ملف الكامبين الأول قبل ما السيرفر يقوم
     # print("🚀 جاري تشغيل حملة الواتساب أولاً (campaign.py)...")
     # try:
     #     subprocess.run([sys.executable, "campaign.py"], check=True)
@@ -236,6 +235,5 @@ if __name__ == "__main__":
     # except FileNotFoundError:
     #     print("❌ ملف campaign.py غير موجود، تأكد من الاسم.")
         
-    # تشغيل سيرفر FastAPI بعد انتهاء الحملة
     print("🌐 جاري تشغيل سيرفر FastAPI...")
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

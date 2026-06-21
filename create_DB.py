@@ -100,7 +100,7 @@ if __name__ == "__main__":
     # Step 2: Add test contacts with specific contexts for the AI to read
     add_contact("Nour Maged", "+201270187283", "Interested in digital marketing for restaurants")
     add_contact("Mohamed Walid", "+201097401832", "Interested in digital marketing for restaurants")
-    add_contact("omar ahmed", "+201034238921", "Potential lead, showed interest in our services during the last campaign")
+    # add_contact("omar ahmed", "+201034238921", "Potential lead, showed interest in our services during the last campaign")
     add_contact("Fatma Gad", "+201015895059", "Attended the AI webinar last week")
     add_contact("Aly Elbadry", "+201286964627", "Potential lead, showed interest in our services during the last campaign")
     
